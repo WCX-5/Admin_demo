@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>后台管理系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: "Microsoft Yahei", sans-serif;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            margin-bottom: 20px;
+            font-size: 32px;
+        }
+        .menu-bar {
+            margin-bottom: 20px;
+        }
+        .menu-bar button {
+            display: inline-block;
+            margin-right: 25px;
+            font-size: 18px;
+            color: #409eff;
+            border: none;
+            background: none;
+            cursor: pointer;
+        }
+        .content-area {
+            width: 100%;
+            min-height: 500px;
+            background-color: #fff;
+            padding: 20px;
+            border: 1px solid #eee;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0;
+            background: white;
+        }
+        .title {
+            margin-bottom: 20px;
+            font-size: 20px;
+        }
+        .btn {
+            padding: 8px 16px;
+            background: #409eff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        .btn-danger {
+            background: #f56c6c;
+        }
+        .btn-cancel {
+            background: #909399;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        table th, table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        table th {
+            background-color: #f8f9fa;
+        }
+        .page-box {
+            margin-top: 20px;
+        }
+        .page-box button {
+            padding: 4px 12px;
+            margin: 0 4px;
+            border: 1px solid #ccc;
+            background: #fff;
+            cursor: pointer;
+        }
+        .page-box button.active {
+            background: #409eff;
+            color: #fff;
+            border-color: #409eff;
+        }
+        .modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background: white; padding: 30px; border-radius: 8px; width: 400px;
+        }
+        .modal-content input {
+            width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px;
+        }
+        .box { margin: 20px 0; }
+        .item {
+            padding: 10px; border: 1px solid #ddd; margin: 5px; display: inline-block; cursor: pointer;
+        }
+        .item.active { background: #e6f7ff; border-color: #409eff; }
+    </style>
+</head>
+<body>
+
+<h1>登录成功！欢迎进入后台管理系统</h1>
+<div class="menu-bar">
+    <button onclick="loadUser()">用户管理</button>
+    <button onclick="loadRole()">角色管理</button>
+    <button onclick="loadPerm()">权限管理</button>
+    <button onclick="loadAssignRole()">用户分配角色</button>
+    <button onclick="loadAssignPerm()">角色分配权限</button>
+    <form action="/logout" method="post" style="display: inline;">
+        <button type="submit">退出登录</button>
+    </form>
+</div>
+<div class="content-area" id="content"></div>
+
+<script>
+    let currUserId = null;
+    let currRoleId = null;
+    const PAGE_SIZE = 5;
+    let userPage = 1, rolePage = 1, permPage = 1;
+    let userTotal = 1, roleTotal = 1, permTotal = 1;
+
+    document.addEventListener('DOMContentLoaded', () => loadUser());
+
+    // ========================== 用户管理（弹窗带取消） ==========================
+    function loadUser(){
+        document.getElementById("content").innerHTML=`
+        <div class="container">
+            <div class="title">用户管理列表</div>
+            <button class="btn" onclick="openAddUser()">新增用户</button>
+            <table>
+                <thead>
+                    <tr><th>ID</th><th>用户名</th><th>昵称</th><th>邮箱</th><th>手机</th><th>操作</th></tr>
+                </thead>
+                <tbody id="userTbody"></tbody>
+            </table>
+            <div class="page-box" id="userPageHtml"></div>
+        </div>
+        <div class="modal" id="userModal">
+            <div class="modal-content">
+                <h3 id="userModalTitle">新增用户</h3>
+                <input type="hidden" id="uid">
+                <input type="text" id="uname" placeholder="用户名">
+                <input type="password" id="upwd" placeholder="密码">
+                <input type="text" id="unick" placeholder="昵称">
+                <input type="text" id="uemail" placeholder="邮箱">
+                <input type="text" id="uphone" placeholder="手机号">
+                <br>
+                <button class="btn" onclick="saveUserInfo()">保存</button>
+                <button class="btn btn-cancel" onclick="closeModal('userModal')">取消</button>
+            </div>
+        </div>`;
+        getUserData(userPage);
+    }
+    function getUserData(page){
+        fetch(`/user/list?pageNum=${page}&pageSize=${PAGE_SIZE}`)
+            .then(res=>res.json()).then(data=>{
+            let list = data.data.records||[];
+            userTotal = data.data.pages||1;
+            userPage = page;
+            let html="";
+            list.forEach(item=>{
+                html+=`<tr>
+                    <td>${item.id}</td>
+                    <td>${item.username}</td>
+                    <td>${item.nickname||''}</td>
+                    <td>${item.email||''}</td>
+                    <td>${item.phone||''}</td>
+                    <td>
+                        <button class="btn" onclick="editUserInfo(${item.id})">修改</button>
+                        <button class="btn btn-danger" onclick="delUser(${item.id})">删除</button>
+                    </td>
+                </tr>`;
+            });
+            document.getElementById("userTbody").innerHTML=html;
+            renderUserPage();
+        })
+    }
+    function renderUserPage(){
+        let h=`<button onclick="getUserData(${userPage-1})" ${userPage<=1?'disabled':''}>上一页</button>`;
+        for(let i=1;i<=userTotal;i++){
+            h+=`<button class="${i==userPage?'active':''}" onclick="getUserData(${i})">${i}</button>`;
+        }
+        h+=`<button onclick="getUserData(${userPage+1})" ${userPage>=userTotal?'disabled':''}>下一页</button>`;
+        document.getElementById("userPageHtml").innerHTML=h;
+    }
+    function openAddUser(){
+        document.getElementById("userModalTitle").innerText="新增用户";
+        document.getElementById("uid").value="";
+        document.getElementById("uname").value="";
+        document.getElementById("upwd").value="";
+        document.getElementById("unick").value="";
+        document.getElementById("uemail").value="";
+        document.getElementById("uphone").value="";
+        document.getElementById("userModal").style.display="flex";
+    }
+    function editUserInfo(id){
+        fetch(`/user/list?pageNum=1&pageSize=999`).then(r=>r.json()).then(d=>{
+            let obj = d.data.records.find(x=>x.id==id);
+            document.getElementById("userModalTitle").innerText="修改用户";
+            document.getElementById("uid").value=obj.id;
+            document.getElementById("uname").value=obj.username;
+            document.getElementById("unick").value=obj.nickname||'';
+            document.getElementById("uemail").value=obj.email||'';
+            document.getElementById("uphone").value=obj.phone||'';
+            document.getElementById("userModal").style.display="flex";
+        })
+    }
+    function saveUserInfo(){
+        let id=document.getElementById("uid").value;
+        let params={
+            username:document.getElementById("uname").value,
+            password:document.getElementById("upwd").value,
+            nickname:document.getElementById("unick").value,
+            email:document.getElementById("uemail").value,
+            phone:document.getElementById("uphone").value
+        };
+        if(id) params.id=id;
+        let url=id?"/user/update":"/user/add";
+        let m=id?"PUT":"POST";
+        fetch(url,{method:m,headers:{"Content-Type":"application/json"},body:JSON.stringify(params)})
+            .then(()=>{
+                closeModal('userModal');
+                getUserData(userPage);
+                alert("保存成功");
+            })
+    }
+    function delUser(id){
+        if(!confirm("确定删除？"))return;
+        fetch(`/user/delete/${id}`,{method:"DELETE"})
+            .then(()=>{getUserData(userPage);alert("删除成功");})
+    }
+
+    // ========================== 角色管理（弹窗带取消） ==========================
+    function loadRole(){
+        document.getElementById("content").innerHTML=`
+        <div class="container">
+            <div class="title">角色管理列表</div>
+            <button class="btn" onclick="openAddRole()">新增角色</button>
+            <table>
+                <thead>
+                    <tr><th>ID</th><th>角色名</th><th>角色编码</th><th>描述</th><th>操作</th></tr>
+                </thead>
+                <tbody id="roleTbody"></tbody>
+            </table>
+            <div class="page-box" id="rolePageHtml"></div>
+        </div>
+        <div class="modal" id="roleModal">
+            <div class="modal-content">
+                <h3 id="roleModalTitle">新增角色</h3>
+                <input type="hidden" id="rid">
+                <input type="text" id="rname" placeholder="角色名称">
+                <input type="text" id="rcode" placeholder="角色编码">
+                <input type="text" id="rdesc" placeholder="角色描述">
+                <br>
+                <button class="btn" onclick="saveRoleInfo()">保存</button>
+                <button class="btn btn-cancel" onclick="closeModal('roleModal')">取消</button>
+            </div>
+        </div>`;
+        getRoleData(rolePage);
+    }
+    function getRoleData(page){
+        fetch(`/role/list?pageNum=${page}&pageSize=${PAGE_SIZE}`)
+            .then(res=>res.json()).then(data=>{
+            let list=data.data.records||[];
+            roleTotal=data.data.pages||1;
+            rolePage=page;
+            let html="";
+            list.forEach(item=>{
+                html+=`<tr>
+                    <td>${item.id}</td>
+                    <td>${item.roleName}</td>
+                    <td>${item.roleCode}</td>
+                    <td>${item.description||''}</td>
+                    <td>
+                        <button class="btn" onclick="editRoleInfo(${item.id})">修改</button>
+                        <button class="btn btn-danger" onclick="delRole(${item.id})">删除</button>
+                    </td>
+                </tr>`;
+            });
+            document.getElementById("roleTbody").innerHTML=html;
+            renderRolePage();
+        })
+    }
+    function renderRolePage(){
+        let h=`<button onclick="getRoleData(${rolePage-1})" ${rolePage<=1?'disabled':''}>上一页</button>`;
+        for(let i=1;i<=roleTotal;i++) h+=`<button class="${i==rolePage?'active':''}" onclick="getRoleData(${i})">${i}</button>`;
+        h+=`<button onclick="getRoleData(${rolePage+1})" ${rolePage>=roleTotal?'disabled':''}>下一页</button>`;
+        document.getElementById("rolePageHtml").innerHTML=h;
+    }
+    function openAddRole(){
+        document.getElementById("roleModalTitle").innerText="新增角色";
+        document.getElementById("rid").value="";
+        document.getElementById("rname").value="";
+        document.getElementById("rcode").value="";
+        document.getElementById("rdesc").value="";
+        document.getElementById("roleModal").style.display="flex";
+    }
+    function editRoleInfo(id){
+        fetch("/role/list?pageNum=1&pageSize=999").then(r=>r.json()).then(d=>{
+            let obj=d.data.records.find(x=>x.id==id);
+            document.getElementById("roleModalTitle").innerText="修改角色";
+            document.getElementById("rid").value=obj.id;
+            document.getElementById("rname").value=obj.roleName;
+            document.getElementById("rcode").value=obj.roleCode;
+            document.getElementById("rdesc").value=obj.description||'';
+            document.getElementById("roleModal").style.display="flex";
+        })
+    }
+    function saveRoleInfo(){
+        let id=document.getElementById("rid").value;
+        let params={roleName:document.getElementById("rname").value,roleCode:document.getElementById("rcode").value,description:document.getElementById("rdesc").value};
+        if(id) params.id=id;
+        let url=id?"/role/update":"/role/add";
+        fetch(url,{method:id?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(params)})
+            .then(()=>{
+                closeModal('roleModal');
+                getRoleData(rolePage);
+                alert("保存成功");
+            })
+    }
+    function delRole(id){
+        if(!confirm("确定删除？"))return;
+        fetch(`/role/delete/${id}`,{method:"DELETE"}).then(()=>{getRoleData(rolePage);alert("删除成功");})
+    }
+
+    // ========================== 权限管理（弹窗带取消） ==========================
+    function loadPerm(){
+        document.getElementById("content").innerHTML=`
+        <div class="container">
+            <div class="title">权限管理列表</div>
+            <button class="btn" onclick="openAddPerm()">新增权限</button>
+            <table>
+                <thead>
+                    <tr><th>ID</th><th>权限名</th><th>权限标识</th><th>访问路径</th><th>操作</th></tr>
+                </thead>
+                <tbody id="permTbody"></tbody>
+            </table>
+            <div class="page-box" id="permPageHtml"></div>
+        </div>
+        <div class="modal" id="permModal">
+            <div class="modal-content">
+                <h3 id="permModalTitle">新增权限</h3>
+                <input type="hidden" id="pid">
+                <input type="text" id="pname" placeholder="权限名称">
+                <input type="text" id="pperms" placeholder="权限标识">
+                <input type="text" id="ppath" placeholder="访问路径">
+                <br>
+                <button class="btn" onclick="savePermInfo()">保存</button>
+                <button class="btn btn-cancel" onclick="closeModal('permModal')">取消</button>
+            </div>
+        </div>`;
+        getPermData(permPage);
+    }
+    function getPermData(page){
+        fetch(`/permission/list?pageNum=${page}&pageSize=${PAGE_SIZE}`)
+            .then(res=>res.json()).then(data=>{
+            let list=data.data.records||[];
+            permTotal=data.data.pages||1;
+            permPage=page;
+            let html="";
+            list.forEach(item=>{
+                html+=`<tr>
+                    <td>${item.id}</td>
+                    <td>${item.name}</td>
+                    <td>${item.perms||''}</td>
+                    <td>${item.path||''}</td>
+                    <td>
+                        <button class="btn" onclick="editPermInfo(${item.id})">修改</button>
+                        <button class="btn btn-danger" onclick="delPerm(${item.id})">删除</button>
+                    </td>
+                </tr>`;
+            });
+            document.getElementById("permTbody").innerHTML=html;
+            renderPermPage();
+        })
+    }
+    function renderPermPage(){
+        let h=`<button onclick="getPermData(${permPage-1})" ${permPage<=1?'disabled':''}>上一页</button>`;
+        for(let i=1;i<=permTotal;i++) h+=`<button class="${i==permPage?'active':''}" onclick="getPermData(${i})">${i}</button>`;
+        h+=`<button onclick="getPermData(${permPage+1})" ${permPage>=permTotal?'disabled':''}>下一页</button>`;
+        document.getElementById("permPageHtml").innerHTML=h;
+    }
+    function openAddPerm(){
+        document.getElementById("permModalTitle").innerText="新增权限";
+        document.getElementById("pid").value="";
+        document.getElementById("pname").value="";
+        document.getElementById("pperms").value="";
+        document.getElementById("ppath").value="";
+        document.getElementById("permModal").style.display="flex";
+    }
+    function editPermInfo(id){
+        fetch("/permission/list?pageNum=1&pageSize=999").then(r=>r.json()).then(d=>{
+            let obj=d.data.records.find(x=>x.id==id);
+            document.getElementById("permModalTitle").innerText="修改权限";
+            document.getElementById("pid").value=obj.id;
+            document.getElementById("pname").value=obj.name;
+            document.getElementById("pperms").value=obj.perms||'';
+            document.getElementById("ppath").value=obj.path||'';
+            document.getElementById("permModal").style.display="flex";
+        })
+    }
+    function savePermInfo(){
+        let id=document.getElementById("pid").value;
+        let params={name:document.getElementById("pname").value,perms:document.getElementById("pperms").value,path:document.getElementById("ppath").value};
+        if(id) params.id=id;
+        let url=id?"/permission/update":"/permission/add";
+        fetch(url,{method:id?"PUT":"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(params)})
+            .then(()=>{
+                closeModal('permModal');
+                getPermData(permPage);
+                alert("保存成功");
+            })
+    }
+    function delPerm(id){
+        if(!confirm("确定删除？"))return;
+        fetch(`/permission/delete/${id}`,{method:"DELETE"}).then(()=>{getPermData(permPage);alert("删除成功");})
+    }
+
+    // ========================== 用户分配角色 ==========================
+    function loadAssignRole(){
+        document.getElementById("content").innerHTML=`
+        <div class="container">
+            <h2>用户分配角色</h2>
+            <div class="box">
+                <h4>选择用户</h4>
+                <div id="userAssignList"></div>
+            </div>
+            <div class="box">
+                <h4>勾选角色（可多选）</h4>
+                <div id="roleAssignList"></div>
+            </div>
+            <button class="btn" onclick="saveUserRole()">保存分配</button>
+        </div>`;
+
+        fetch("/user/list?pageNum=1&pageSize=999").then(r=>r.json()).then(d=>{
+            let h="";
+            d.data.records.forEach(u=>{
+                h+=`<div class="item" onclick="selUser(${u.id},this)">${u.username}</div>`;
+            });
+            document.getElementById("userAssignList").innerHTML=h;
+        });
+
+        fetch("/role/list?pageNum=1&pageSize=999").then(r=>r.json()).then(d=>{
+            let h="";
+            d.data.records.forEach(ro=>{
+                h+=`<div class="item">
+                    <input type="checkbox" value="${ro.id}" id="r_${ro.id}">
+                    <label for="r_${ro.id}">${ro.roleName}</label>
+                </div>`;
+            });
+            document.getElementById("roleAssignList").innerHTML=h;
+        });
+    }
+
+    function selUser(id,e){
+        document.querySelectorAll("#userAssignList .item").forEach(i=>i.classList.remove("active"));
+        e.classList.add("active");
+        currUserId = id;
+    }
+
+    function saveUserRole(){
+        if(!currUserId){alert("请选择用户");return;}
+
+        let roleIds = Array.from(document.querySelectorAll("#roleAssignList input:checked")).map(i=>i.value);
+
+        if(roleIds.length===0){alert("请至少选一个角色");return;}
+
+        fetch("/user/assignRole",{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({userId:currUserId, roleIds:roleIds})
+        }).then(()=>alert("分配成功！"));
+    }
+
+    // ========================== 角色分配权限 ==========================
+    function loadAssignPerm(){
+        document.getElementById("content").innerHTML=`
+        <div class="container">
+            <h2>角色分配权限</h2>
+            <div class="box"><h4>选择角色</h4><div id="selRoleList"></div></div>
+            <div class="box"><h4>勾选权限</h4><div id="selPermList"></div></div>
+            <button class="btn" onclick="saveRolePerm()">保存分配</button>
+        </div>`;
+        fetch("/role/list?pageNum=1&pageSize=999").then(r=>r.json()).then(d=>{
+            let h="";d.data.records.forEach(ro=>h+=`<div class="item" onclick="pickRole(${ro.id},this)">${ro.roleName}</div>`);
+            document.getElementById("selRoleList").innerHTML=h;
+        });
+        fetch("/permission/list?pageNum=1&pageSize=999").then(r=>r.json()).then(d=>{
+            let h="";d.data.records.forEach(p=>h+=`<div class="item"><input type="checkbox" value="${p.id}">${p.name}</div>`);
+            document.getElementById("selPermList").innerHTML=h;
+        });
+    }
+    function pickRole(id,e){
+        document.querySelectorAll("#selRoleList .item").forEach(i=>i.classList.remove("active"));
+        e.classList.add("active");currRoleId=id;
+    }
+    function saveRolePerm(){
+        if(!currRoleId){alert("请选择角色");return;}
+        let arr=Array.from(document.querySelectorAll("#selPermList input:checked")).map(v=>v.value);
+        fetch("/role/assignPerm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({roleId:currRoleId,permIds:arr})})
+            .then(()=>alert("分配成功"));
+    }
+
+    // 关闭弹窗通用函数
+    function closeModal(modalId){
+        document.getElementById(modalId).style.display = "none";
+    }
+</script>
+</body>
+</html>
